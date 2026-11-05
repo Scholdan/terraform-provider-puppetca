@@ -1,3 +1,9 @@
+## 2.1.0 (Nov 5, 2026)
+
+- Revoke the certificate before deleting it on destroy (DELETE certificate_status alone leaves it valid and out of the CRL)
+- Bump Go to 1.26 and all dependencies
+- Release via GitHub Actions + GoReleaser v2; drop Travis
+
 ## 2.0.0 (Oct 30, 2023)
 
 - Rewrite provider to switch from the old Terraform Plugin SDKv1 to the new Terraform Plugin Framework

@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -327,9 +328,23 @@ func retryGetOrSignCert(ctx context.Context, client *puppetca.Client, nodeName s
 func deleteCert(ctx context.Context, client *puppetca.Client, nodeName string, environment string) error {
 	logFields := log.CertificateFields(nodeName, environment)
 
+	// Puppet's DELETE certificate_status does not revoke, so revoke first or the
+	// deleted cert stays valid and never reaches the CRL.
+	tflog.Trace(ctx, "Requesting certificate revocation", logFields)
+
+	_, err := client.Put("certificate_status/"+nodeName, environment, `{"desired_state":"revoked"}`,
+		map[string]string{"Content-Type": "application/json"})
+
+	tflog.Trace(ctx, "Requested certificate revocation", log.MergeFields(logFields, log.ErrorField(err)))
+
+	// ponytail: 404 = nothing to revoke, 409 = already revoked or only a CSR; anything else must fail the destroy.
+	if err != nil && !isErrNotFound(err) && !strings.Contains(err.Error(), http.StatusText(http.StatusConflict)) {
+		return fmt.Errorf("failed to revoke certificate %s: %w", nodeName, err)
+	}
+
 	tflog.Trace(ctx, "Requesting certificate deletion", logFields)
 
-	err := client.DeleteCertByName(nodeName, environment)
+	err = client.DeleteCertByName(nodeName, environment)
 
 	tflog.Trace(ctx, "Requested certificate deletion", log.MergeFields(logFields, log.ErrorField(err)))
 
